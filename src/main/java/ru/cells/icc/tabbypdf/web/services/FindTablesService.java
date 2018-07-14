@@ -1,6 +1,6 @@
 package ru.cells.icc.tabbypdf.web.services;
 
-import org.json.simple.JSONObject;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations;
 import ru.cells.icc.tabbypdf.web.data.entities.FileReference;
 
 import java.io.IOException;
@@ -15,5 +15,5 @@ public interface FindTablesService {
      * @return JSON, содержащий координаты таблиц
      * @throws IOException если не удалось обработать PDF
      */
-    JSONObject find(FileReference file) throws IOException;
+    TableLocations find(FileReference file) throws IOException;
 }

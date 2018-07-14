@@ -1,31 +1,35 @@
 package ru.cells.icc.tabbypdf.web.services;
 
-import com.itextpdf.text.pdf.PdfReader;
 import org.apache.log4j.Logger;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.json.simple.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations.PageJson;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations.PageJson.TableLocation;
 import ru.cells.icc.tabbypdf.web.data.entities.FileReference;
-import ru.cells.icc.tabbypdf.web.utils.JsonUtils;
 import ru.icc.cells.tabbypdf.App;
-import ru.icc.cells.tabbypdf.common.Page;
-import ru.icc.cells.tabbypdf.common.Rectangle;
-import ru.icc.cells.tabbypdf.common.table.Table;
-import ru.icc.cells.tabbypdf.recognizers.SimpleTableRecognizer;
-import ru.icc.cells.tabbypdf.recognizers.TableOptimizer;
-import ru.icc.cells.tabbypdf.utils.content.PdfContentExtractor;
+import ru.icc.cells.tabbypdf.entities.Page;
+import ru.icc.cells.tabbypdf.entities.Rectangle;
+import ru.icc.cells.tabbypdf.entities.table.Table;
+import ru.icc.cells.tabbypdf.extraction.PdfDataExtractor;
+import ru.icc.cells.tabbypdf.recognition.SimpleTableRecognizer;
+import ru.icc.cells.tabbypdf.recognition.TableOptimizer;
 import ru.icc.cells.tabbypdf.utils.processing.TextChunkProcessorConfiguration;
 import ru.icc.cells.tabbypdf.writers.TableToExcelWriter;
 import ru.icc.cells.tabbypdf.writers.TableToHtmlWriter;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Сервис для извлечения таблиц из PDF.
@@ -45,107 +49,91 @@ public class ExtractTablesServiceImpl implements ExtractTablesService {
     private String fileSavePath;
 
     @Override
-    public JSONObject extract(JSONObject json) throws IOException, TransformerException, ParserConfigurationException {
+    public TableLocations extract(TableLocations json) throws IOException, TransformerException, ParserConfigurationException {
         logger.info("processing JSON");
 
         List<FileReference> files = new ArrayList<>();
 
-        Long id = (Long) json.get("id");
-
-        JSONObject resultJson = new JSONObject();
-        resultJson.put("id", id);
-        JSONObject resultPages = new JSONObject();
-        resultJson.put("pages", resultPages);
+        Long id = json.getId();
 
         FileReference ref = fileSaveService.findById(id);
 
-        PdfContentExtractor extractor = null;
-        PdfReader reader = null;
-        try {
-            logger.info(String.format("trying to process pdf file %s", ref.getName()));
-            extractor = new PdfContentExtractor(fileSavePath + ref.getName());
-            reader = new PdfReader(fileSavePath + ref.getName());
+        logger.info(String.format("trying to process pdf file %s", ref.getName()));
 
-            JSONObject pagesJson = (JSONObject) json.get("pages");
-            List pageNumbers = JsonUtils.getSortedKeys(pagesJson);
+        PdfDataExtractor extractor = new PdfDataExtractor.Factory()
+                .getPdfBoxTextExtractor(fileSavePath + ref.getName());
 
-            logger.info(String.format("processing %d pages", pageNumbers.size()));
-            for (int i = 0; i < pageNumbers.size(); i++) {
-                logger.info(String.format("processing page %d of %d", i + 1, pageNumbers.size()));
+        PDDocument doc = PDDocument.load(new File(fileSavePath + ref.getName()));
 
-                Object pageNumber = pageNumbers.get(i);
+        List<PageJson> pagesJson = json.getPages();
 
-                JSONObject resultPage = new JSONObject();
-                resultPages.put(pageNumber, resultPage);
+        List<Integer> pageNumbers = pagesJson
+                .stream()
+                .map(PageJson::getPageNumber)
+                .collect(Collectors.toList());
 
-                com.itextpdf.text.Rectangle pageSize = reader.getPageSize(Integer.parseInt(pageNumber.toString()) + 1);
+        List<Page> pageContent = extractor.getPageContent();
 
-                Page page = extractor.getPageContent(Integer.parseInt(pageNumber.toString()));
+        logger.info(String.format("processing %d tables", pageNumbers.size()));
+        for (int i = 0; i < pageNumbers.size(); i++) {
+            logger.info(String.format("processing page %d of %d", i + 1, pageNumbers.size()));
 
-                JSONObject pageJson = (JSONObject) pagesJson.get(pageNumber);
-                List rectangleIdsJson = JsonUtils.getSortedKeys(pageJson);
+            Integer pageNumber = pageNumbers.get(i);
 
-                logger.info(String.format("processing %d tables", rectangleIdsJson.size()));
-                for (int j = 0; j < rectangleIdsJson.size(); j++) {
-                    logger.info(String.format("processing table %d of %d", j + 1, rectangleIdsJson.size()));
-                    Object rectangleId = rectangleIdsJson.get(j);
-                    Table table = extractFromRegion(
-                            pageNumber,
-                            page.getRegion(getRectangle(pageJson, rectangleId, pageSize))
-                    );
+            PDRectangle pageSize = doc.getPage(i).getMediaBox();
 
-                    List<Table> tableList = Collections.singletonList(table);
+            Page page = pageContent.get(Integer.parseInt(pageNumber.toString()));
 
-                    logger.info("saving table to html");
-                    String html = new TableToHtmlWriter().write(tableList).get(0);
+            PageJson pageJson = pagesJson.get(pageNumber);
 
-                    logger.info("saving table to excel");
-                    XSSFWorkbook excelWorkbook = new TableToExcelWriter().write(tableList);
+            logger.info(String.format("processing %d tables", pageJson.getTables().size()));
+            for (int tableNumber = 0; tableNumber < pageJson.getTables().size(); tableNumber++) {
+                logger.info(String.format("processing table %d of %d", tableNumber + 1, pageJson.getTables().size()));
+                TableLocation tableLocation = pageJson.getTables().get(tableNumber);
+                Table table = extractFromRegion(pageNumber, page.getRegion(getRectangle(tableLocation, pageSize)));
 
-                    FileReference savedHtmlRef = fileSaveService.saveText(
-                            html,
-                            ref.getName() + "_page_" + pageNumber + "_table_" + rectangleId.toString() + ".html"
-                    );
-                    FileReference savedExcelRef = fileSaveService.saveExcel(
-                            excelWorkbook,
-                            ref.getName() + "_page_" + pageNumber + "_table_" + rectangleId.toString() + ".xlsx"
-                    );
-                    files.add(savedExcelRef);
-                    files.add(savedHtmlRef);
+                List<Table> tableList = Collections.singletonList(table);
 
-                    JSONObject resultPageJson = new JSONObject();
-                    resultPageJson.put("htmlId", savedHtmlRef.getId());
-                    resultPageJson.put("excelId", savedExcelRef.getId());
-                    resultPageJson.put("html", html);
-                    resultPage.put(rectangleId, resultPageJson);
-                }
-            }
-            if (files.size() > 0) {
-                logger.info(String.format("packing %d files to archive", files.size()));
-                FileReference archive = fileSaveService.archiveFiles(files, ref.getName() + "_results.zip");
-                resultJson.put("resultId", archive.getId());
-            }
-            return resultJson;
-        } finally {
-            if (extractor != null) {
-                extractor.close();
-            }
-            if (reader != null) {
-                reader.close();
+                logger.info("saving table to html");
+                String html = new TableToHtmlWriter().write(tableList).get(0);
+
+                logger.info("saving table to excel");
+                XSSFWorkbook excelWorkbook = new TableToExcelWriter().write(tableList);
+
+                FileReference savedHtmlRef = fileSaveService.saveText(
+                        html,
+                        ref.getName() + "_page_" + pageNumber + "_table_" + tableNumber + ".html"
+                );
+                FileReference savedExcelRef = fileSaveService.saveExcel(
+                        excelWorkbook,
+                        ref.getName() + "_page_" + pageNumber + "_table_" + tableNumber + ".xlsx"
+                );
+                files.add(savedExcelRef);
+                files.add(savedHtmlRef);
+
+                tableLocation.setHtmlId(savedHtmlRef.getId());
+                tableLocation.setExcelId(savedExcelRef.getId());
+                tableLocation.setHtml(html);
             }
         }
+        if (files.size() > 0) {
+            logger.info(String.format("packing %d files to archive", files.size()));
+            FileReference archive = fileSaveService.archiveFiles(files, ref.getName() + "_results.zip");
+            json.setResultId(archive.getId());
+        }
+        return json;
     }
 
-    private static Rectangle getRectangle(JSONObject pageJson, Object rectangleId,
-                                          com.itextpdf.text.Rectangle pageSize) {
-        JSONObject rectangleJson = (JSONObject) pageJson.get(rectangleId);
-        float height = Math.abs(pageSize.getTop() - pageSize.getBottom());
-        float width = Math.abs(pageSize.getLeft() - pageSize.getRight());
+    private static Rectangle getRectangle(TableLocation tableLocation,
+                                          PDRectangle pageSize) {
+        float height = pageSize.getHeight();
+        float width = pageSize.getWidth();
 
-        float top = JsonUtils.getFloat(rectangleJson, "top") * height;
-        float btm = JsonUtils.getFloat(rectangleJson, "bottom") * height;
-        float left = JsonUtils.getFloat(rectangleJson, "left") * width;
-        float right = JsonUtils.getFloat(rectangleJson, "right") * width;
+        double top   = tableLocation.getTop() * height;
+        double btm   = tableLocation.getBottom() * height;
+        double left  = tableLocation.getLeft() * width;
+        double right = tableLocation.getRight() * width;
+
         return new Rectangle(left, btm, right, top);
     }
 

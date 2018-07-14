@@ -1,6 +1,7 @@
 package ru.cells.icc.tabbypdf.web.services;
 
 import org.json.simple.JSONObject;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -21,5 +22,5 @@ public interface ExtractTablesService {
      * @throws TransformerException Если не получилось трансформировать таблицы в html
      * @throws ParserConfigurationException Если не получилось трансформировать таблицы в html
      */
-    JSONObject extract(JSONObject json) throws IOException, TransformerException, ParserConfigurationException;
+    TableLocations extract(TableLocations json) throws IOException, TransformerException, ParserConfigurationException;
 }

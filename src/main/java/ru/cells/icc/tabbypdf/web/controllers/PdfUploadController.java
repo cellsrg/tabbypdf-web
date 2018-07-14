@@ -5,8 +5,12 @@ import org.json.simple.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations;
 import ru.cells.icc.tabbypdf.web.data.entities.FileReference;
 import ru.cells.icc.tabbypdf.web.services.FileSaveService;
 import ru.cells.icc.tabbypdf.web.services.FindTablesService;
@@ -36,17 +40,17 @@ public class PdfUploadController {
      * @return {@link ResponseEntity}&lt;{@link JSONObject}&gt; - JSON, содержащий id файла и координаты таблиц
      */
     @RequestMapping(method = RequestMethod.POST)
-    public ResponseEntity<JSONObject> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<TableLocations> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
             logger.info(String.format("saving pdf: %s", file.getName()));
             FileReference savedFile = fileSaveService.saveMultipartFile(file);
             logger.info(String.format("pdf successfully saved, id=%s", savedFile.getId()));
 
             logger.info("trying to find tables");
-            JSONObject json = findTablesService.find(savedFile);
+            TableLocations json = findTablesService.find(savedFile);
             logger.info("tables are found");
 
-            json.put("id", savedFile.getId());
+            json.setId(savedFile.getId());
             return new ResponseEntity<>(json, HttpStatus.OK);
         } catch (IOException e) {
             logger.error("could not save file or find tables:", e);
