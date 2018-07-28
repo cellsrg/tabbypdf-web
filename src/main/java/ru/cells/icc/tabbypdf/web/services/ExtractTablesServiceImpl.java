@@ -13,7 +13,6 @@ import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations.Pag
 import ru.cells.icc.tabbypdf.web.data.entities.FileReference;
 import ru.icc.cells.tabbypdf.App;
 import ru.icc.cells.tabbypdf.entities.Page;
-import ru.icc.cells.tabbypdf.entities.Rectangle;
 import ru.icc.cells.tabbypdf.entities.table.Table;
 import ru.icc.cells.tabbypdf.extraction.PdfDataExtractor;
 import ru.icc.cells.tabbypdf.recognition.SimpleTableRecognizer;
@@ -30,6 +29,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static ru.cells.icc.tabbypdf.web.utils.JsonUtils.getRectangle;
 
 /**
  * Сервис для извлечения таблиц из PDF.
@@ -124,21 +125,7 @@ public class ExtractTablesServiceImpl implements ExtractTablesService {
         return json;
     }
 
-    private static Rectangle getRectangle(TableLocation tableLocation,
-                                          PDRectangle pageSize) {
-        float height = pageSize.getHeight();
-        float width = pageSize.getWidth();
-
-        double top   = tableLocation.getTop() * height;
-        double btm   = tableLocation.getBottom() * height;
-        double left  = tableLocation.getLeft() * width;
-        double right = tableLocation.getRight() * width;
-
-        return new Rectangle(left, btm, right, top);
-    }
-
-    private static Table extractFromRegion(Object pageNumber, Page region)
-            throws IOException, TransformerException, ParserConfigurationException {
+    private static Table extractFromRegion(Object pageNumber, Page region) {
         TextChunkProcessorConfiguration recognitionConfig = App.getRecognizingConfiguration();
         SimpleTableRecognizer recognizer = new SimpleTableRecognizer(recognitionConfig);
 

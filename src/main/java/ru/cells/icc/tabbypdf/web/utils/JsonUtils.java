@@ -1,6 +1,10 @@
 package ru.cells.icc.tabbypdf.web.utils;
 
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.json.simple.JSONObject;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations;
+import ru.cells.icc.tabbypdf.web.controllers.responseentities.TableLocations.PageJson.TableLocation;
+import ru.icc.cells.tabbypdf.entities.Rectangle;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,30 +18,20 @@ import java.util.List;
 public class JsonUtils {
 
     /**
-     * Получение списка сортированных по алфавиту ключей json-объекта.
-     * @param json json-объект
-     * @return Список сортированных по алфавиту ключей json-объекта
+     * Returns rectangle with converted tableLocation coordinates to PDF's page size.
+     * @param tableLocation contains table location coordinates
+     * @param pageSize      PDF page size
+     * @return rectangle with converted tableLocation coordinates to PDF's page size.
      */
-    public static List getSortedKeys(JSONObject json) {
-        List keys = new ArrayList(json.keySet());
-        keys.sort((o1, o2) -> o1.toString().compareTo(o2.toString()));
-        return keys;
-    }
+    public static Rectangle getRectangle(TableLocation tableLocation, PDRectangle pageSize) {
+        float height = pageSize.getHeight();
+        float width = pageSize.getWidth();
 
-    /**
-     * Получение float из json-объекта по ключу
-     * @param json json-объект
-     * @param field ключ
-     * @return float
-     */
-    public static float getFloat(JSONObject json, String field) {
-        Object val = json.get(field);
-        float floatVal;
-        try {
-            floatVal = ((Double) val).floatValue();
-        } catch (ClassCastException e) {
-            floatVal = (Long) val;
-        }
-        return floatVal;
+        double top   = tableLocation.getTop() * height;
+        double btm   = tableLocation.getBottom() * height;
+        double left  = tableLocation.getLeft() * width;
+        double right = tableLocation.getRight() * width;
+
+        return new Rectangle(left, btm, right, top);
     }
 }
